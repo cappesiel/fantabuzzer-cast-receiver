@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FantaBuzzer — Receiver</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b1220;color:#f5f7fa;font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
+  .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:4vh 4vw;box-sizing:border-box}
+  .player{font-size:6vw;font-weight:800;text-align:center}
+  .team{font-size:2.2vw;opacity:.7;margin-top:.5vh}
+  .price{font-size:12vw;font-weight:900;margin:3vh 0;color:#ffce45}
+  .bidder{font-size:3.5vw;font-weight:700;color:#4ade80}
+  .status{font-size:2vw;opacity:.6;margin-top:2vh;letter-spacing:.1em;text-transform:uppercase}
+  .list{display:flex;gap:2vw;flex-wrap:wrap;justify-content:center;margin-top:4vh}
+  .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.5vw;font-size:1.6vw}
+  .chip b{color:#ffce45}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="status" id="status">In attesa del telefono Host…</div>
+    <div class="player" id="player">—</div>
+    <div class="team" id="team"></div>
+    <div class="price" id="price">0</div>
+    <div class="bidder" id="bidder"></div>
+    <div class="list" id="list"></div>
+  </div>
+
+<!-- =========================================================================================
+     CAST RECEIVER SDK (versione "custom", NON media): questa pagina non riproduce audio/video,
+     mostra solo dati testuali dell'asta, quindi usiamo l'API base cast.receiver invece del
+     framework CAF pensato per i player video.
+
+     Flusso:
+       1) Il Sender (app FantaBuzzer Android) avvia una sessione Cast verso questo receiver.
+       2) Il Sender invia SUBITO un messaggio custom con { hostIp, port, roomId } — questa
+          pagina, una volta caricata da Internet (GitHub Pages), è comunque fisicamente
+          eseguita sul Chromecast, che è sulla STESSA rete locale del server embedded: può
+          quindi aprire una connessione WebSocket diretta a ws://hostIp:port/ws, in locale,
+          senza passare da Internet una seconda volta.
+       3) Da lì in poi riceve i room_state_change broadcast come spettatore (join_as_spectator,
+          vedi BuzzerServer.kt) e aggiorna la UI.
+     ========================================================================================= -->
+<script src="https://www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
+<script>
+  const NAMESPACE = 'urn:x-cast:com.fantabuzzer.app';
+  const els = {
+    status: document.getElementById('status'),
+    player: document.getElementById('player'),
+    team: document.getElementById('team'),
+    price: document.getElementById('price'),
+    bidder: document.getElementById('bidder'),
+    list: document.getElementById('list'),
+  };
+
+  let socket = null;
+
+  function connectToLocalServer(hostIp, port, roomId) {
+    els.status.textContent = 'Connessione a ' + hostIp + ':' + port + '…';
+    if (socket) { try { socket.close(); } catch (e) {} }
+
+    socket = new WebSocket('ws://' + hostIp + ':' + port + '/ws');
+    socket.onopen = () => {
+      els.status.textContent = 'Connesso';
+      socket.send(JSON.stringify({ type: 'join_as_spectator', roomId: roomId }));
+    };
+    socket.onclose = () => {
+      els.status.textContent = 'Connessione persa, riprovo…';
+      setTimeout(() => connectToLocalServer(hostIp, port, roomId), 2000);
+    };
+    socket.onerror = () => { els.status.textContent = 'Errore di connessione al server locale'; };
+    socket.onmessage = (msg) => {
+      const evt = JSON.parse(msg.data);
+      if (evt.type !== 'room_state_change') return;
+      const s = evt.snapshot;
+      els.status.textContent = s.state;
+      els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore…';
+      els.team.textContent = s.currentPlayer ? (s.currentPlayer.role + ' · ' + s.currentPlayer.team) : '';
+      els.price.textContent = s.currentBid;
+      const bidderP = s.participants.find(p => p.id === s.currentTopBidderId);
+      els.bidder.textContent = bidderP ? ('In testa: ' + bidderP.nickname) : '';
+      els.list.innerHTML = s.participants.map(p =>
+        '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
+      ).join('');
+    };
+  }
+
+  const context = cast.receiver.CastReceiverManager.getInstance();
+  const messageBus = context.getCastMessageBus(NAMESPACE);
+
+  messageBus.onMessage = (event) => {
+    // event.data è la stringa JSON inviata dal Sender: { hostIp, port, roomId }
+    try {
+      const config = JSON.parse(event.data);
+      if (config.hostIp && config.port && config.roomId) {
+        connectToLocalServer(config.hostIp, config.port, config.roomId);
+      }
+    } catch (e) {
+      els.status.textContent = 'Messaggio dal telefono non valido';
+    }
+  };
+
+  context.onSenderDisconnected = () => {
+    // Ultimo sender disconnesso: per l'MVP lasciamo il receiver acceso a mostrare
+    // l'ultimo stato noto invece di chiudere subito la sessione Cast.
+  };
+
+  context.start();
+</script>
+</body>
+</html>
