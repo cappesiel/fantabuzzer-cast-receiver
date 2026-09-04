@@ -10,41 +10,60 @@
 
   /* ---- Sidebar sinistra: rose delle squadre virtuali, in ordine alfabetico ---- */
   .sidebar{
-    width:23vw;min-width:230px;height:100%;box-sizing:border-box;
-    padding:3vh 1.2vw;overflow-y:auto;background:#0e1830;border-right:1px solid #1c2b45;
+    width:22vw;min-width:210px;height:100%;box-sizing:border-box;
+    padding:3vh 1.1vw;overflow-y:auto;background:#0e1830;border-right:1px solid #1c2b45;
   }
-  .sidebar h2{
-    font-size:1.3vw;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:0 0 2vh 0;
+  .sidebar h2, .summary h2{
+    font-size:1.2vw;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:0 0 2vh 0;
   }
   .roster-card{background:#1c2b45;border-radius:.7vw;padding:1.2vh 1vw;margin-bottom:1.4vh}
-  .roster-card .team{font-size:1.6vw;font-weight:800;color:#4ade80;line-height:1.15}
-  .roster-card .owner{font-size:1vw;opacity:.6;margin-top:.1vh}
+  .roster-card .team{font-size:1.5vw;font-weight:800;color:#4ade80;line-height:1.15}
+  .roster-card .owner{font-size:.95vw;opacity:.6;margin-top:.1vh}
   .roster-card .players{margin-top:.8vh}
   .roster-card .player-row{
-    display:flex;justify-content:space-between;gap:.6vw;font-size:1.05vw;padding:.35vh 0;
+    display:flex;justify-content:space-between;gap:.6vw;font-size:1vw;padding:.35vh 0;
     border-top:1px solid rgba(255,255,255,.08);
   }
   .roster-card .player-row:first-child{border-top:none}
   .roster-card .player-name{opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .roster-card .player-price{color:#ffce45;font-weight:700;flex-shrink:0}
-  .roster-empty{font-size:.95vw;opacity:.4;font-style:italic;margin-top:.4vh}
-  .sidebar-empty{font-size:1.1vw;opacity:.5;margin-top:2vh}
+  .roster-empty{font-size:.9vw;opacity:.4;font-style:italic;margin-top:.4vh}
+  .sidebar-empty{font-size:1vw;opacity:.5;margin-top:2vh}
 
   /* ---- Area centrale: tabellone principale ---- */
   .wrap{
     flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    height:100%;padding:4vh 3vw;box-sizing:border-box;min-width:0;
+    height:100%;padding:4vh 2vw;box-sizing:border-box;min-width:0;
   }
-  .player{font-size:5.5vw;font-weight:800;text-align:center}
-  .team{font-size:2vw;opacity:.7;margin-top:.5vh}
-  .price{font-size:11vw;font-weight:900;margin:2.5vh 0;color:#ffce45}
-  .countdown{font-size:4.5vw;font-weight:900;color:#ffce45;margin-top:-1vh;margin-bottom:1vh;min-height:5vw}
-  .bidder{font-size:3.2vw;font-weight:700;color:#4ade80}
-  .status{font-size:1.8vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
-  .automode{font-size:1.4vw;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
-  .list{display:flex;gap:1.5vw;flex-wrap:wrap;justify-content:center;margin-top:3vh}
-  .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.5vw;font-size:1.4vw}
+  .player{font-size:5vw;font-weight:800;text-align:center}
+  .team{font-size:1.9vw;opacity:.75;margin-top:.6vh;text-align:center}
+  .team .rolebadge{
+    display:inline-block;background:#233355;color:#8ecbff;border-radius:.5vw;
+    padding:.2vh .8vw;font-size:.85vw;font-weight:700;text-transform:uppercase;
+    letter-spacing:.06em;margin-right:.6vw;vertical-align:middle;
+  }
+  .price{font-size:10vw;font-weight:900;margin:2.5vh 0;color:#ffce45}
+  .countdown{font-size:4.2vw;font-weight:900;color:#ffce45;margin-top:-1vh;margin-bottom:1vh;min-height:4.5vw}
+  .bidder{font-size:3vw;font-weight:700;color:#4ade80}
+  .status{font-size:1.7vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
+  .automode{font-size:1.3vw;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
+  .list{display:flex;gap:1.3vw;flex-wrap:wrap;justify-content:center;margin-top:3vh}
+  .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.4vw;font-size:1.3vw}
   .chip b{color:#ffce45}
+
+  /* ---- Pannello destro: quanti calciatori mancano ancora, per ruolo ---- */
+  .summary{
+    width:15vw;min-width:170px;height:100%;box-sizing:border-box;
+    padding:3vh 1.1vw;overflow-y:auto;background:#0e1830;border-left:1px solid #1c2b45;
+  }
+  .summary .intro{font-size:.85vw;opacity:.5;margin-bottom:1.6vh;line-height:1.4}
+  .role-count-row{
+    background:#1c2b45;border-radius:.7vw;padding:1.1vh 1vw;margin-bottom:1vh;
+    display:flex;align-items:baseline;justify-content:space-between;
+  }
+  .role-count-row .role-label{font-size:1.05vw;font-weight:700;opacity:.9}
+  .role-count-row .role-remaining{font-size:1.9vw;font-weight:900;color:#ffce45}
+  .role-count-row.zero .role-remaining{color:#4ade80}
 </style>
 </head>
 <body>
@@ -64,6 +83,12 @@
       <div class="bidder" id="bidder"></div>
       <div class="list" id="list"></div>
     </div>
+
+    <div class="summary">
+      <h2>Mancano all'asta</h2>
+      <div class="intro">Calciatori ancora da presentare, per ruolo.</div>
+      <div id="remaining"></div>
+    </div>
   </div>
 
 <!-- =========================================================================================
@@ -79,9 +104,11 @@
           quindi aprire una connessione WebSocket diretta a ws://hostIp:port/ws, in locale,
           senza passare da Internet una seconda volta.
        3) Da lì in poi riceve i room_state_change broadcast come spettatore (join_as_spectator,
-          vedi BuzzerServer.kt) e aggiorna la UI, incluse le rose delle fantasquadre
-          (snapshot.rosters, vedi RoomManager.buildRostersLocked, già ordinate alfabeticamente
-          per nome squadra) e il countdown (snapshot.roundDeadlineEpochMs / serverTimeEpochMs).
+          vedi BuzzerServer.kt) e aggiorna la UI: le rose delle fantasquadre a sinistra
+          (snapshot.rosters, gia' ordinate alfabeticamente per nome squadra), il ruolo esteso
+          (RUOLONOME) del calciatore in asta al centro, il countdown, e a destra quanti
+          calciatori mancano ancora da presentare per ruolo (snapshot.remainingByRole, vedi
+          RoomManager.buildRemainingByRoleLocked).
      ========================================================================================= -->
 <script src="https://www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
 <script>
@@ -96,7 +123,13 @@
     bidder: document.getElementById('bidder'),
     list: document.getElementById('list'),
     rosters: document.getElementById('rosters'),
+    remaining: document.getElementById('remaining'),
   };
+
+  // RUOLONOME esteso, sia per il calciatore in asta al centro sia per il riepilogo a destra.
+  const roleLabels = { P: 'Portiere', D: 'Difensore', C: 'Centrocampista', A: 'Attaccante' };
+  const roleLabelsPlural = { P: 'Portieri', D: 'Difensori', C: 'Centrocampisti', A: 'Attaccanti' };
+  const roleOrder = ['P', 'D', 'C', 'A'];
 
   let socket = null;
 
@@ -141,6 +174,22 @@
     }).join('');
   }
 
+  function renderRemaining(remainingByRole) {
+    if (!remainingByRole || remainingByRole.length === 0) {
+      els.remaining.innerHTML = '';
+      return;
+    }
+    const byRole = {};
+    remainingByRole.forEach(rc => { byRole[rc.role] = rc.remaining; });
+    els.remaining.innerHTML = roleOrder.map(role => {
+      const count = byRole[role] || 0;
+      return '<div class="role-count-row' + (count === 0 ? ' zero' : '') + '">' +
+        '<span class="role-label">' + roleLabelsPlural[role] + '</span>' +
+        '<span class="role-remaining">' + count + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
   function connectToLocalServer(hostIp, port, roomId) {
     els.status.textContent = 'Connessione a ' + hostIp + ':' + port + '…';
     if (socket) { try { socket.close(); } catch (e) {} }
@@ -162,7 +211,9 @@
       els.status.textContent = s.state;
       els.automode.style.display = s.autoMode ? 'block' : 'none';
       els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore…';
-      els.team.textContent = s.currentPlayer ? (s.currentPlayer.role + ' · ' + s.currentPlayer.team) : '';
+      els.team.innerHTML = s.currentPlayer
+        ? ('<span class="rolebadge">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
+        : '';
       els.price.textContent = s.currentBid;
       const bidderP = s.participants.find(p => p.id === s.currentTopBidderId);
       els.bidder.textContent = bidderP ? ('In testa: ' + bidderP.nickname) : '';
@@ -170,6 +221,7 @@
         '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
       ).join('');
       renderRosters(s.rosters);
+      renderRemaining(s.remainingByRole);
       if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
         deadlineMs = s.roundDeadlineEpochMs;
         clockOffsetMs = s.serverTimeEpochMs - Date.now();
