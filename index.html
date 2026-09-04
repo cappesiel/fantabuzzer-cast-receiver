@@ -6,25 +6,59 @@
 <title>FantaBuzzer — Receiver</title>
 <style>
   html,body{margin:0;height:100%;background:#0b1220;color:#f5f7fa;font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
-  .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:4vh 4vw;box-sizing:border-box}
-  .player{font-size:6vw;font-weight:800;text-align:center}
-  .team{font-size:2.2vw;opacity:.7;margin-top:.5vh}
-  .price{font-size:12vw;font-weight:900;margin:3vh 0;color:#ffce45}
-  .bidder{font-size:3.5vw;font-weight:700;color:#4ade80}
-  .status{font-size:2vw;opacity:.6;margin-top:2vh;letter-spacing:.1em;text-transform:uppercase}
-  .list{display:flex;gap:2vw;flex-wrap:wrap;justify-content:center;margin-top:4vh}
-  .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.5vw;font-size:1.6vw}
+  .layout{display:flex;height:100%;box-sizing:border-box}
+
+  /* ---- Sidebar sinistra: storico calciatori comprati ---- */
+  .sidebar{
+    width:22vw;min-width:220px;height:100%;box-sizing:border-box;
+    padding:3vh 1.2vw;overflow-y:auto;background:#0e1830;border-right:1px solid #1c2b45;
+  }
+  .sidebar h2{
+    font-size:1.3vw;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:0 0 2vh 0;
+  }
+  .history-row{
+    background:#1c2b45;border-radius:.6vw;padding:1vh 1vw;margin-bottom:1vh;
+  }
+  .history-row .buyer{font-size:1.4vw;font-weight:800;color:#4ade80}
+  .history-row .player{font-size:1.3vw;font-weight:700;margin-top:.2vh}
+  .history-row .meta{font-size:1vw;opacity:.6;margin-top:.2vh}
+  .history-row .price{font-size:1.3vw;font-weight:900;color:#ffce45;margin-top:.4vh}
+  .history-empty{font-size:1.1vw;opacity:.5;margin-top:2vh}
+
+  /* ---- Area centrale: tabellone principale (invariato) ---- */
+  .wrap{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100%;padding:4vh 3vw;box-sizing:border-box;min-width:0;
+  }
+  .player{font-size:5.5vw;font-weight:800;text-align:center}
+  .team{font-size:2vw;opacity:.7;margin-top:.5vh}
+  .price{font-size:11vw;font-weight:900;margin:2.5vh 0;color:#ffce45}
+  .countdown{font-size:4.5vw;font-weight:900;color:#ffce45;margin-top:-1vh;margin-bottom:1vh;min-height:5vw}
+  .bidder{font-size:3.2vw;font-weight:700;color:#4ade80}
+  .status{font-size:1.8vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
+  .automode{font-size:1.4vw;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
+  .list{display:flex;gap:1.5vw;flex-wrap:wrap;justify-content:center;margin-top:3vh}
+  .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.5vw;font-size:1.4vw}
   .chip b{color:#ffce45}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="status" id="status">In attesa del telefono Host…</div>
-    <div class="player" id="player">—</div>
-    <div class="team" id="team"></div>
-    <div class="price" id="price">0</div>
-    <div class="bidder" id="bidder"></div>
-    <div class="list" id="list"></div>
+  <div class="layout">
+    <div class="sidebar">
+      <h2>Calciatori comprati</h2>
+      <div id="history"></div>
+    </div>
+
+    <div class="wrap">
+      <div class="status" id="status">In attesa del telefono Host…</div>
+      <div class="automode" id="automode">Modalità automatica</div>
+      <div class="player" id="player">—</div>
+      <div class="team" id="team"></div>
+      <div class="price" id="price">0</div>
+      <div class="countdown" id="countdown"></div>
+      <div class="bidder" id="bidder"></div>
+      <div class="list" id="list"></div>
+    </div>
   </div>
 
 <!-- =========================================================================================
@@ -40,21 +74,61 @@
           quindi aprire una connessione WebSocket diretta a ws://hostIp:port/ws, in locale,
           senza passare da Internet una seconda volta.
        3) Da lì in poi riceve i room_state_change broadcast come spettatore (join_as_spectator,
-          vedi BuzzerServer.kt) e aggiorna la UI.
+          vedi BuzzerServer.kt) e aggiorna la UI, incluso lo storico degli acquisti
+          (snapshot.assignedHistory, vedi RoomManager.buildAssignedHistoryLocked) e il
+          countdown (snapshot.roundDeadlineEpochMs / serverTimeEpochMs).
      ========================================================================================= -->
 <script src="https://www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
 <script>
   const NAMESPACE = 'urn:x-cast:com.fantabuzzer.app';
   const els = {
     status: document.getElementById('status'),
+    automode: document.getElementById('automode'),
     player: document.getElementById('player'),
     team: document.getElementById('team'),
     price: document.getElementById('price'),
+    countdown: document.getElementById('countdown'),
     bidder: document.getElementById('bidder'),
     list: document.getElementById('list'),
+    history: document.getElementById('history'),
   };
 
   let socket = null;
+
+  // ---- Countdown: interpolato lato client tra i due valori che il server manda in OGNI
+  // snapshot (roundDeadlineEpochMs / serverTimeEpochMs), cosi' scorre fluido anche tra un
+  // aggiornamento websocket e l'altro, compensando lo sfasamento tra l'orologio del telefono
+  // Host e quello del Chromecast. ----
+  let deadlineMs = null;
+  let clockOffsetMs = 0;
+  function updateCountdown() {
+    if (deadlineMs === null) { els.countdown.textContent = ''; return; }
+    const estimatedServerNow = Date.now() + clockOffsetMs;
+    const msLeft = deadlineMs - estimatedServerNow;
+    const secLeft = msLeft > 0 ? Math.ceil(msLeft / 1000) : 0;
+    els.countdown.textContent = '⏱ ' + secLeft;
+    els.countdown.style.color = secLeft <= 3 ? '#e7352c' : '#ffce45';
+  }
+  setInterval(updateCountdown, 150);
+
+  const roleLabels = { P: 'Portiere', D: 'Difensore', C: 'Centrocampista', A: 'Attaccante' };
+
+  function renderHistory(history) {
+    if (!history || history.length === 0) {
+      els.history.innerHTML = '<div class="history-empty">Nessun acquisto ancora.</div>';
+      return;
+    }
+    // Piu' recente in cima: l'ordine ricevuto dal server e' cronologico d'asta.
+    const rows = history.slice().reverse();
+    els.history.innerHTML = rows.map(r =>
+      '<div class="history-row">' +
+        '<div class="buyer">' + r.buyerNickname + '</div>' +
+        '<div class="player">' + r.playerName + '</div>' +
+        '<div class="meta">' + (roleLabels[r.role] || r.role) + ' · ' + r.team + '</div>' +
+        '<div class="price">' + r.price + ' cr.</div>' +
+      '</div>'
+    ).join('');
+  }
 
   function connectToLocalServer(hostIp, port, roomId) {
     els.status.textContent = 'Connessione a ' + hostIp + ':' + port + '…';
@@ -75,6 +149,7 @@
       if (evt.type !== 'room_state_change') return;
       const s = evt.snapshot;
       els.status.textContent = s.state;
+      els.automode.style.display = s.autoMode ? 'block' : 'none';
       els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore…';
       els.team.textContent = s.currentPlayer ? (s.currentPlayer.role + ' · ' + s.currentPlayer.team) : '';
       els.price.textContent = s.currentBid;
@@ -83,6 +158,14 @@
       els.list.innerHTML = s.participants.map(p =>
         '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
       ).join('');
+      renderHistory(s.assignedHistory);
+      if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
+        deadlineMs = s.roundDeadlineEpochMs;
+        clockOffsetMs = s.serverTimeEpochMs - Date.now();
+      } else {
+        deadlineMs = null;
+      }
+      updateCountdown();
     };
   }
 
