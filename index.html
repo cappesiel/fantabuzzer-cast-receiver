@@ -8,24 +8,29 @@
   html,body{margin:0;height:100%;background:#0b1220;color:#f5f7fa;font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
   .layout{display:flex;height:100%;box-sizing:border-box}
 
-  /* ---- Sidebar sinistra: storico calciatori comprati ---- */
+  /* ---- Sidebar sinistra: rose delle squadre virtuali, in ordine alfabetico ---- */
   .sidebar{
-    width:22vw;min-width:220px;height:100%;box-sizing:border-box;
+    width:23vw;min-width:230px;height:100%;box-sizing:border-box;
     padding:3vh 1.2vw;overflow-y:auto;background:#0e1830;border-right:1px solid #1c2b45;
   }
   .sidebar h2{
     font-size:1.3vw;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:0 0 2vh 0;
   }
-  .history-row{
-    background:#1c2b45;border-radius:.6vw;padding:1vh 1vw;margin-bottom:1vh;
+  .roster-card{background:#1c2b45;border-radius:.7vw;padding:1.2vh 1vw;margin-bottom:1.4vh}
+  .roster-card .team{font-size:1.6vw;font-weight:800;color:#4ade80;line-height:1.15}
+  .roster-card .owner{font-size:1vw;opacity:.6;margin-top:.1vh}
+  .roster-card .players{margin-top:.8vh}
+  .roster-card .player-row{
+    display:flex;justify-content:space-between;gap:.6vw;font-size:1.05vw;padding:.35vh 0;
+    border-top:1px solid rgba(255,255,255,.08);
   }
-  .history-row .buyer{font-size:1.4vw;font-weight:800;color:#4ade80}
-  .history-row .player{font-size:1.3vw;font-weight:700;margin-top:.2vh}
-  .history-row .meta{font-size:1vw;opacity:.6;margin-top:.2vh}
-  .history-row .price{font-size:1.3vw;font-weight:900;color:#ffce45;margin-top:.4vh}
-  .history-empty{font-size:1.1vw;opacity:.5;margin-top:2vh}
+  .roster-card .player-row:first-child{border-top:none}
+  .roster-card .player-name{opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .roster-card .player-price{color:#ffce45;font-weight:700;flex-shrink:0}
+  .roster-empty{font-size:.95vw;opacity:.4;font-style:italic;margin-top:.4vh}
+  .sidebar-empty{font-size:1.1vw;opacity:.5;margin-top:2vh}
 
-  /* ---- Area centrale: tabellone principale (invariato) ---- */
+  /* ---- Area centrale: tabellone principale ---- */
   .wrap{
     flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
     height:100%;padding:4vh 3vw;box-sizing:border-box;min-width:0;
@@ -45,8 +50,8 @@
 <body>
   <div class="layout">
     <div class="sidebar">
-      <h2>Calciatori comprati</h2>
-      <div id="history"></div>
+      <h2>Rose fantasquadre</h2>
+      <div id="rosters"></div>
     </div>
 
     <div class="wrap">
@@ -74,9 +79,9 @@
           quindi aprire una connessione WebSocket diretta a ws://hostIp:port/ws, in locale,
           senza passare da Internet una seconda volta.
        3) Da lì in poi riceve i room_state_change broadcast come spettatore (join_as_spectator,
-          vedi BuzzerServer.kt) e aggiorna la UI, incluso lo storico degli acquisti
-          (snapshot.assignedHistory, vedi RoomManager.buildAssignedHistoryLocked) e il
-          countdown (snapshot.roundDeadlineEpochMs / serverTimeEpochMs).
+          vedi BuzzerServer.kt) e aggiorna la UI, incluse le rose delle fantasquadre
+          (snapshot.rosters, vedi RoomManager.buildRostersLocked, già ordinate alfabeticamente
+          per nome squadra) e il countdown (snapshot.roundDeadlineEpochMs / serverTimeEpochMs).
      ========================================================================================= -->
 <script src="https://www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
 <script>
@@ -90,7 +95,7 @@
     countdown: document.getElementById('countdown'),
     bidder: document.getElementById('bidder'),
     list: document.getElementById('list'),
-    history: document.getElementById('history'),
+    rosters: document.getElementById('rosters'),
   };
 
   let socket = null;
@@ -111,23 +116,29 @@
   }
   setInterval(updateCountdown, 150);
 
-  const roleLabels = { P: 'Portiere', D: 'Difensore', C: 'Centrocampista', A: 'Attaccante' };
-
-  function renderHistory(history) {
-    if (!history || history.length === 0) {
-      els.history.innerHTML = '<div class="history-empty">Nessun acquisto ancora.</div>';
+  function renderRosters(rosters) {
+    if (!rosters || rosters.length === 0) {
+      els.rosters.innerHTML = '<div class="sidebar-empty">Nessuna squadra ancora.</div>';
       return;
     }
-    // Piu' recente in cima: l'ordine ricevuto dal server e' cronologico d'asta.
-    const rows = history.slice().reverse();
-    els.history.innerHTML = rows.map(r =>
-      '<div class="history-row">' +
-        '<div class="buyer">' + r.buyerNickname + '</div>' +
-        '<div class="player">' + r.playerName + '</div>' +
-        '<div class="meta">' + (roleLabels[r.role] || r.role) + ' · ' + r.team + '</div>' +
-        '<div class="price">' + r.price + ' cr.</div>' +
-      '</div>'
-    ).join('');
+    // Il server le manda gia' ordinate per nome squadra, ma ordiniamo anche qui per
+    // sicurezza (es. se un client vecchio inviasse l'elenco non ordinato).
+    const sorted = rosters.slice().sort((a, b) => a.teamName.localeCompare(b.teamName));
+    els.rosters.innerHTML = sorted.map(r => {
+      const playersHtml = (r.players && r.players.length > 0)
+        ? r.players.map(p =>
+            '<div class="player-row">' +
+              '<span class="player-name">' + p.playerName + '</span>' +
+              '<span class="player-price">' + p.price + ' cr.</span>' +
+            '</div>'
+          ).join('')
+        : '<div class="roster-empty">Nessun acquisto ancora.</div>';
+      return '<div class="roster-card">' +
+        '<div class="team">' + r.teamName + '</div>' +
+        '<div class="owner">' + r.nickname + '</div>' +
+        '<div class="players">' + playersHtml + '</div>' +
+      '</div>';
+    }).join('');
   }
 
   function connectToLocalServer(hostIp, port, roomId) {
@@ -158,7 +169,7 @@
       els.list.innerHTML = s.participants.map(p =>
         '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
       ).join('');
-      renderHistory(s.assignedHistory);
+      renderRosters(s.rosters);
       if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
         deadlineMs = s.roundDeadlineEpochMs;
         clockOffsetMs = s.serverTimeEpochMs - Date.now();
