@@ -55,6 +55,7 @@
   .summary{
     width:15vw;min-width:170px;height:100%;box-sizing:border-box;
     padding:3vh 1.1vw;overflow-y:auto;background:#0e1830;border-left:1px solid #1c2b45;
+    display:flex;flex-direction:column;
   }
   .summary .intro{font-size:.85vw;opacity:.5;margin-bottom:1.6vh;line-height:1.4}
   .role-count-row{
@@ -65,20 +66,16 @@
   .role-count-row .role-remaining{font-size:1.9vw;font-weight:900;color:#ffce45}
   .role-count-row.zero .role-remaining{color:#4ade80}
 
-  .join-qr{margin-bottom:2.6vh;text-align:center;background:#1c2b45;border-radius:.7vw;padding:1.6vh 1vw}
-  .join-qr #joinQr{display:inline-block;line-height:0;background:#fff;padding:.5vw;border-radius:.4vw}
+  .join-qr{margin-top:auto;padding-top:2vh;text-align:center}
+  .join-qr #joinQr{display:inline-block;line-height:0;background:#fff;padding:.35vw;border-radius:.35vw;width:5.2vw;max-width:80px;min-width:56px}
   .join-qr #joinQr img, .join-qr #joinQr canvas{width:100%!important;height:auto!important;display:block}
-  .join-qr .join-qr-caption{font-size:.85vw;opacity:.7;margin-top:.8vh}
-  .join-qr .join-qr-room{font-size:1.3vw;font-weight:800;color:#ffce45}
+  .join-qr .join-qr-caption{font-size:.7vw;opacity:.6;margin-top:.6vh;line-height:1.3}
+  .join-qr .join-qr-room{font-size:.85vw;font-weight:800;color:#ffce45}
 </style>
 </head>
 <body>
   <div class="layout">
     <div class="sidebar">
-      <div class="join-qr" id="joinQrBox" style="display:none">
-        <div id="joinQr"></div>
-        <div class="join-qr-caption">Inquadra per entrare<br/><span class="join-qr-room" id="joinQrRoom"></span></div>
-      </div>
       <h2>Rose fantasquadre</h2>
       <div id="rosters"></div>
     </div>
@@ -98,6 +95,10 @@
       <h2>Mancano all'asta</h2>
       <div class="intro">Calciatori ancora da presentare, per ruolo.</div>
       <div id="remaining"></div>
+      <div class="join-qr" id="joinQrBox" style="display:none">
+        <div id="joinQr"></div>
+        <div class="join-qr-caption">Inquadra per entrare<br/><span class="join-qr-room" id="joinQrRoom"></span></div>
+      </div>
     </div>
   </div>
 
@@ -208,8 +209,8 @@
     box.innerHTML = '';
     new QRCode(box, {
       text: 'fantabuzzer://' + hostIp + ':' + port + '/' + roomId,
-      width: 150,
-      height: 150,
+      width: 80,
+      height: 80,
       colorDark: '#0b1220',
       colorLight: '#ffffff',
     });
