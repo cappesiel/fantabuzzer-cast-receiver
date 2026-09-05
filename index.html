@@ -64,11 +64,21 @@
   .role-count-row .role-label{font-size:1.05vw;font-weight:700;opacity:.9}
   .role-count-row .role-remaining{font-size:1.9vw;font-weight:900;color:#ffce45}
   .role-count-row.zero .role-remaining{color:#4ade80}
+
+  .join-qr{margin-bottom:2.6vh;text-align:center;background:#1c2b45;border-radius:.7vw;padding:1.6vh 1vw}
+  .join-qr #joinQr{display:inline-block;line-height:0;background:#fff;padding:.5vw;border-radius:.4vw}
+  .join-qr #joinQr img, .join-qr #joinQr canvas{width:100%!important;height:auto!important;display:block}
+  .join-qr .join-qr-caption{font-size:.85vw;opacity:.7;margin-top:.8vh}
+  .join-qr .join-qr-room{font-size:1.3vw;font-weight:800;color:#ffce45}
 </style>
 </head>
 <body>
   <div class="layout">
     <div class="sidebar">
+      <div class="join-qr" id="joinQrBox" style="display:none">
+        <div id="joinQr"></div>
+        <div class="join-qr-caption">Inquadra per entrare<br/><span class="join-qr-room" id="joinQrRoom"></span></div>
+      </div>
       <h2>Rose fantasquadre</h2>
       <div id="rosters"></div>
     </div>
@@ -111,6 +121,7 @@
           RoomManager.buildRemainingByRoleLocked).
      ========================================================================================= -->
 <script src="https://www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
   const NAMESPACE = 'urn:x-cast:com.fantabuzzer.app';
   const els = {
@@ -190,8 +201,25 @@
     }).join('');
   }
 
+  function renderJoinQr(hostIp, port, roomId) {
+    // QR coi dati di connessione (IP:porta + codice stanza) da inquadrare col telefono invece
+    // di digitarli a mano — vedi MainActivity.JoinSetupScreen (pulsante "Scansiona QR").
+    const box = document.getElementById('joinQr');
+    box.innerHTML = '';
+    new QRCode(box, {
+      text: 'fantabuzzer://' + hostIp + ':' + port + '/' + roomId,
+      width: 150,
+      height: 150,
+      colorDark: '#0b1220',
+      colorLight: '#ffffff',
+    });
+    document.getElementById('joinQrRoom').textContent = 'Stanza ' + roomId;
+    document.getElementById('joinQrBox').style.display = 'block';
+  }
+
   function connectToLocalServer(hostIp, port, roomId) {
     els.status.textContent = 'Connessione a ' + hostIp + ':' + port + '…';
+    renderJoinQr(hostIp, port, roomId);
     if (socket) { try { socket.close(); } catch (e) {} }
 
     socket = new WebSocket('ws://' + hostIp + ':' + port + '/ws');
