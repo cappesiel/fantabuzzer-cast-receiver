@@ -4,135 +4,292 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>FantaBuzzer — Receiver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 <style>
-  html,body{margin:0;height:100%;background:#0b1220;color:#f5f7fa;font-family:'Segoe UI',Roboto,sans-serif;overflow:hidden}
-  .layout{display:flex;height:100%;box-sizing:border-box}
+  :root {
+    --bg: #070b14;
+    --panel: rgba(16, 24, 42, .72);
+    --panel-solid: #10182a;
+    --line: rgba(255,255,255,.08);
+    --text: #f4f7fb;
+    --muted: #8b9bb4;
+    --gold: #ffce45;
+    --gold-soft: rgba(255,206,69,.16);
+    --green: #3ee687;
+    --red: #ff4d4f;
+    --blue: #7cbcff;
+    --radius: 1.1vw;
+  }
 
-  /* ---- Sidebar sinistra: rose delle squadre virtuali, in ordine alfabetico ---- */
-  .sidebar{
-    width:22vw;min-width:210px;height:100%;box-sizing:border-box;
-    padding:3vh 1.1vw;overflow-y:auto;background:#0e1830;border-right:1px solid #1c2b45;
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Outfit, "Segoe UI", sans-serif;
+    overflow: hidden;
   }
-  .sidebar h2, .summary h2{
-    font-size:1.2vw;text-transform:uppercase;letter-spacing:.08em;opacity:.6;margin:0 0 2vh 0;
-  }
-  .roster-card{background:#1c2b45;border-radius:.7vw;padding:1.2vh 1vw;margin-bottom:1.4vh}
-  .roster-card .team{font-size:1.5vw;font-weight:800;color:#4ade80;line-height:1.15}
-  .roster-card .owner{font-size:.95vw;opacity:.6;margin-top:.1vh}
-  .roster-card .players{margin-top:.8vh}
-  .roster-card .player-row{
-    display:flex;justify-content:space-between;gap:.6vw;font-size:1vw;padding:.35vh 0;
-    border-top:1px solid rgba(255,255,255,.08);
-  }
-  .roster-card .player-row:first-child{border-top:none}
-  .roster-card .player-name{opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .roster-card .player-price{color:#ffce45;font-weight:700;flex-shrink:0}
-  .roster-empty{font-size:.9vw;opacity:.4;font-style:italic;margin-top:.4vh}
-  .sidebar-empty{font-size:1vw;opacity:.5;margin-top:2vh}
 
-  /* ---- Area centrale: tabellone principale ---- */
-  .wrap{
-    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    height:100%;padding:4vh 2vw;box-sizing:border-box;min-width:0;
+  .bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .orb {
+    position: absolute; border-radius: 50%; filter: blur(80px); opacity: .42;
+    transition: background .6s ease, transform 1.2s ease;
   }
-  .player{font-size:5vw;font-weight:800;text-align:center}
-  .team{font-size:1.9vw;opacity:.75;margin-top:.6vh;text-align:center}
-  .team .rolebadge{
-    display:inline-block;background:#233355;color:#8ecbff;border-radius:.5vw;
-    padding:.2vh .8vw;font-size:.85vw;font-weight:700;text-transform:uppercase;
-    letter-spacing:.06em;margin-right:.6vw;vertical-align:middle;
-  }
-  .price{font-size:10vw;font-weight:900;margin:2.5vh 0;color:#ffce45}
-  .countdown-ring{position:relative;width:11vw;height:11vw;min-width:90px;min-height:90px;margin:.5vh 0 1.4vh;display:none}
-  .countdown-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
-  .countdown-ring .ring-track{fill:none;stroke:rgba(255,255,255,.12);stroke-width:9}
-  .countdown-ring .ring-progress{fill:none;stroke:#ffce45;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .18s linear,stroke .2s}
-  .countdown-ring .countdown-number{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.4vw;font-weight:900;color:#ffce45}
-  .bidder{font-size:3vw;font-weight:700;color:#4ade80}
-  .status{font-size:1.7vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
-  .automode{font-size:1.3vw;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
-  .pausebadge{font-size:1.4vw;font-weight:900;color:#ffce45;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
-  .list{display:flex;gap:1.3vw;flex-wrap:wrap;justify-content:center;margin-top:3vh}
-  .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.4vw;font-size:1.3vw}
-  .chip b{color:#ffce45}
+  .orb-a { width: 42vw; height: 42vw; left: -8vw; top: -12vw; background: #1b3a7a; }
+  .orb-b { width: 36vw; height: 36vw; right: -6vw; bottom: -10vw; background: #5a3a00; }
+  body[data-state="BUZZER_ACTIVE"] .orb-b { background: #8a5a00; opacity: .55; }
+  body[data-state="ROUND_END"] .orb-b, body[data-state="ASSIGNED"] .orb-b { background: #0d5a32; }
+  body.is-paused .orb-a { background: #6a4a00; }
 
-  /* ---- Pannello destro: quanti calciatori mancano ancora, per ruolo ---- */
-  .summary{
-    width:15vw;min-width:170px;height:100%;box-sizing:border-box;
-    padding:3vh 1.1vw;overflow-y:auto;background:#0e1830;border-left:1px solid #1c2b45;
-    display:flex;flex-direction:column;
+  .layout {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(220px, 22vw) 1fr minmax(190px, 16vw);
+    height: 100%;
   }
-  .summary .intro{font-size:.85vw;opacity:.5;margin-bottom:1.6vh;line-height:1.4}
-  .role-count-row{
-    background:#1c2b45;border-radius:.7vw;padding:1.1vh 1vw;margin-bottom:1vh;
-    display:flex;align-items:baseline;justify-content:space-between;
-  }
-  .role-count-row .role-label{font-size:1.05vw;font-weight:700;opacity:.9}
-  .role-count-row .role-remaining{font-size:1.9vw;font-weight:900;color:#ffce45}
-  .role-count-row.zero .role-remaining{color:#4ade80}
 
-  .join-qr{margin-top:auto;padding-top:2vh;text-align:center}
-  .join-qr #joinQr{display:inline-block;line-height:0;background:#fff;padding:.35vw;border-radius:.35vw;width:5.2vw;max-width:80px;min-width:56px}
-  .join-qr #joinQr img, .join-qr #joinQr canvas{width:100%!important;height:auto!important;display:block}
-  .join-qr .join-qr-caption{font-size:.7vw;opacity:.6;margin-top:.6vh;line-height:1.3}
-  .join-qr .join-qr-room{font-size:.85vw;font-weight:800;color:#ffce45}
+  .sidebar, .rail {
+    background: linear-gradient(180deg, rgba(10,16,30,.92), rgba(8,12,22,.88));
+    border-color: var(--line);
+    padding: 2.4vh 1.2vw 2vh;
+    overflow-y: auto;
+    backdrop-filter: blur(16px);
+  }
+  .sidebar { border-right: 1px solid var(--line); }
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+
+  .brand {
+    display: flex; align-items: center; gap: .7vw;
+    margin-bottom: 2.4vh;
+  }
+  .brand-mark {
+    width: 2.2vw; height: 2.2vw; min-width: 28px; min-height: 28px;
+    border-radius: .55vw;
+    background: linear-gradient(135deg, #ffce45, #ff8a1f);
+    box-shadow: 0 0 18px rgba(255,206,69,.35);
+  }
+  .brand-name { font-weight: 800; font-size: 1.35vw; letter-spacing: -.02em; line-height: 1; }
+  .brand-name span { display: block; color: var(--gold); font-size: .72vw; letter-spacing: .16em; text-transform: uppercase; margin-top: .25vh; }
+
+  .section-title {
+    font-size: .78vw; font-weight: 700; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 1.4vh;
+  }
+
+  .roster-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.3vh 1vw 1.1vh;
+    margin-bottom: 1.1vh;
+  }
+  .roster-card .team { font-size: 1.25vw; font-weight: 800; color: var(--green); line-height: 1.15; }
+  .roster-card .owner { font-size: .85vw; color: var(--muted); margin-top: .15vh; }
+  .roster-card .players { margin-top: .7vh; }
+  .roster-card .player-row {
+    display: flex; justify-content: space-between; gap: .6vw;
+    font-size: .92vw; padding: .4vh 0;
+    border-top: 1px solid var(--line);
+  }
+  .roster-card .player-row:first-child { border-top: none; }
+  .roster-card .player-name { opacity: .92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .roster-card .player-price { color: var(--gold); font-weight: 700; flex-shrink: 0; }
+  .roster-empty, .sidebar-empty { font-size: .9vw; color: var(--muted); font-style: italic; margin-top: .4vh; }
+
+  .stage {
+    min-width: 0;
+    display: flex; flex-direction: column;
+    padding: 2.4vh 2.2vw 2.6vh;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 1vw;
+  }
+  .pills { display: flex; flex-wrap: wrap; gap: .55vw; align-items: center; }
+  .pill {
+    display: none; align-items: center; gap: .4vw;
+    padding: .45vh .8vw; border-radius: 999px;
+    font-size: .85vw; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    border: 1px solid var(--line); background: rgba(255,255,255,.04);
+  }
+  .pill.show { display: inline-flex; }
+  .pill-live { color: var(--green); border-color: rgba(62,230,135,.25); background: rgba(62,230,135,.08); }
+  .pill-live i {
+    width: .55vw; height: .55vw; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 10px var(--green); animation: pulse 1.4s infinite;
+  }
+  .pill-auto { color: var(--green); }
+  .pill-pause { color: var(--gold); background: var(--gold-soft); border-color: rgba(255,206,69,.25); }
+  .status {
+    font-size: .95vw; color: var(--muted); font-weight: 600; letter-spacing: .04em;
+  }
+
+  .hero {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+  }
+  .player {
+    font-size: clamp(42px, 5.4vw, 110px);
+    font-weight: 900; letter-spacing: -.04em; line-height: .95;
+    max-width: 18ch;
+  }
+  .team {
+    margin-top: 1.4vh; font-size: 1.55vw; color: var(--muted); font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: .6vw;
+  }
+  .rolebadge {
+    display: inline-flex; align-items: center;
+    background: rgba(124,188,255,.12); color: var(--blue);
+    border: 1px solid rgba(124,188,255,.2);
+    border-radius: 999px; padding: .25vh .75vw;
+    font-size: .78vw; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  }
+  .role-P { background: rgba(255,206,69,.12); color: var(--gold); border-color: rgba(255,206,69,.22); }
+  .role-D { background: rgba(62,230,135,.1); color: var(--green); border-color: rgba(62,230,135,.22); }
+  .role-C { background: rgba(124,188,255,.12); color: var(--blue); border-color: rgba(124,188,255,.22); }
+  .role-A { background: rgba(255,77,79,.12); color: #ff8a8c; border-color: rgba(255,77,79,.22); }
+
+  .price-block { margin: 2.2vh 0 1.2vh; }
+  .price {
+    font-size: clamp(64px, 9.4vw, 180px);
+    font-weight: 900; line-height: .85; color: var(--gold);
+    text-shadow: 0 0 40px rgba(255,206,69,.22);
+    transition: transform .18s ease;
+  }
+  .price.pop { transform: scale(1.06); }
+  .price-label { margin-top: .6vh; font-size: 1.05vw; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+  .countdown-ring {
+    position: relative; width: 9.2vw; height: 9.2vw; min-width: 86px; min-height: 86px;
+    margin: 1vh 0 1.6vh; display: none;
+  }
+  .countdown-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .countdown-ring .ring-track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 8; }
+  .countdown-ring .ring-progress {
+    fill: none; stroke: var(--gold); stroke-width: 8; stroke-linecap: round;
+    transition: stroke-dashoffset .18s linear, stroke .2s;
+    filter: drop-shadow(0 0 8px rgba(255,206,69,.35));
+  }
+  .countdown-ring .countdown-number {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 2.8vw; font-weight: 900; color: var(--gold);
+  }
+
+  .bidder {
+    min-height: 3.2vh;
+    font-size: 2.1vw; font-weight: 800; color: var(--green);
+    letter-spacing: -.02em;
+  }
+  .bidder:empty { display: none; }
+
+  .list {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: .7vw;
+    margin-top: 1.2vh;
+  }
+  .chip {
+    background: rgba(255,255,255,.04);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: .7vh 1.1vw;
+    font-size: 1.05vw; font-weight: 600;
+  }
+  .chip b { color: var(--gold); }
+  .chip.lead {
+    border-color: rgba(62,230,135,.35);
+    background: rgba(62,230,135,.1);
+    box-shadow: 0 0 16px rgba(62,230,135,.12);
+  }
+
+  .role-count-row {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: .85vw;
+    padding: 1.15vh 1vw;
+    margin-bottom: .8vh;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .role-count-row .role-label { font-size: .95vw; font-weight: 700; color: #d5deea; }
+  .role-count-row .role-remaining { font-size: 1.7vw; font-weight: 900; color: var(--gold); }
+  .role-count-row.zero .role-remaining { color: var(--green); }
+  .intro { font-size: .78vw; color: var(--muted); margin: 0 0 1.4vh; line-height: 1.4; }
+
+  .join-qr {
+    margin-top: auto; padding-top: 2vh; text-align: center;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 1.4vh 1vw 1.5vh;
+  }
+  .join-qr #joinQr {
+    display: inline-block; line-height: 0; background: #fff;
+    padding: .4vw; border-radius: .45vw;
+    width: 6.2vw; max-width: 96px; min-width: 64px;
+  }
+  .join-qr #joinQr img, .join-qr #joinQr canvas { width: 100% !important; height: auto !important; display: block; }
+  .join-qr-caption { font-size: .72vw; color: var(--muted); margin-top: .7vh; line-height: 1.35; }
+  .join-qr-room { display: block; font-size: .95vw; font-weight: 800; color: var(--gold); margin-top: .25vh; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .45; transform: scale(.85); }
+  }
 </style>
 </head>
 <body>
+  <div class="bg" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+  </div>
+
   <div class="layout">
-    <div class="sidebar">
-      <h2>Rose fantasquadre</h2>
-      <div id="rosters"></div>
-    </div>
-
-    <div class="wrap">
-      <div class="status" id="status">In attesa del telefono Host…</div>
-      <div class="pausebadge" id="pausebadge">⏸ In pausa</div>
-      <div class="automode" id="automode">Modalità automatica</div>
-      <div class="player" id="player">—</div>
-      <div class="team" id="team"></div>
-      <div class="price" id="price">0</div>
-      <div class="countdown-ring" id="countdownRing">
-        <svg viewBox="0 0 120 120">
-          <circle class="ring-track" cx="60" cy="60" r="54"></circle>
-          <circle class="ring-progress" id="ringProgress" cx="60" cy="60" r="54"></circle>
-        </svg>
-        <div class="countdown-number" id="countdown"></div>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-name">FantaBuzzer<span>Asta live</span></div>
       </div>
-      <div class="bidder" id="bidder"></div>
-      <div class="list" id="list"></div>
-    </div>
+      <h2 class="section-title">Rose</h2>
+      <div id="rosters"></div>
+    </aside>
 
-    <div class="summary">
-      <h2>Mancano all'asta</h2>
-      <div class="intro">Calciatori ancora da presentare, per ruolo.</div>
+    <main class="stage">
+      <div class="topbar">
+        <div class="pills">
+          <span class="pill pill-live show" id="livepill"><i></i> Live</span>
+          <span class="pill pill-auto" id="automode">Auto</span>
+          <span class="pill pill-pause" id="pausebadge">In pausa</span>
+        </div>
+        <div class="status" id="status">In attesa del telefono Host…</div>
+      </div>
+
+      <div class="hero">
+        <div class="player" id="player">Pronto per l’asta</div>
+        <div class="team" id="team"></div>
+        <div class="price-block">
+          <div class="price" id="price">0</div>
+          <div class="price-label">crediti</div>
+        </div>
+        <div class="countdown-ring" id="countdownRing">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+            <circle class="ring-progress" id="ringProgress" cx="60" cy="60" r="54"></circle>
+          </svg>
+          <div class="countdown-number" id="countdown"></div>
+        </div>
+        <div class="bidder" id="bidder"></div>
+        <div class="list" id="list"></div>
+      </div>
+    </main>
+
+    <aside class="rail">
+      <h2 class="section-title">Mancano</h2>
+      <p class="intro">Calciatori ancora da presentare, per ruolo.</p>
       <div id="remaining"></div>
       <div class="join-qr" id="joinQrBox" style="display:none">
         <div id="joinQr"></div>
-        <div class="join-qr-caption">Inquadra per entrare<br/><span class="join-qr-room" id="joinQrRoom"></span></div>
+        <div class="join-qr-caption">Inquadra per entrare<span class="join-qr-room" id="joinQrRoom"></span></div>
       </div>
-    </div>
+    </aside>
   </div>
 
-<!-- =========================================================================================
-     CAST RECEIVER SDK (versione "custom", NON media): questa pagina non riproduce audio/video,
-     mostra solo dati testuali dell'asta, quindi usiamo l'API base cast.receiver invece del
-     framework CAF pensato per i player video.
-
-     Flusso:
-       1) Il Sender (app FantaBuzzer Android) avvia una sessione Cast verso questo receiver.
-       2) Il Sender invia SUBITO un messaggio custom con { hostIp, port, roomId } — questa
-          pagina, una volta caricata da Internet (GitHub Pages), è comunque fisicamente
-          eseguita sul Chromecast, che è sulla STESSA rete locale del server embedded: può
-          quindi aprire una connessione WebSocket diretta a ws://hostIp:port/ws, in locale,
-          senza passare da Internet una seconda volta.
-       3) Da lì in poi riceve i room_state_change broadcast come spettatore (join_as_spectator,
-          vedi BuzzerServer.kt) e aggiorna la UI: le rose delle fantasquadre a sinistra
-          (snapshot.rosters, gia' ordinate alfabeticamente per nome squadra), il ruolo esteso
-          (RUOLONOME) del calciatore in asta al centro, il countdown, e a destra quanti
-          calciatori mancano ancora da presentare per ruolo (snapshot.remainingByRole, vedi
-          RoomManager.buildRemainingByRoleLocked).
-     ========================================================================================= -->
 <script src="https://www.gstatic.com/cast/sdk/libs/receiver/2.0.0/cast_receiver.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
@@ -153,17 +310,21 @@
     remaining: document.getElementById('remaining'),
   };
 
-  // RUOLONOME esteso, sia per il calciatore in asta al centro sia per il riepilogo a destra.
   const roleLabels = { P: 'Portiere', D: 'Difensore', C: 'Centrocampista', A: 'Attaccante' };
   const roleLabelsPlural = { P: 'Portieri', D: 'Difensori', C: 'Centrocampisti', A: 'Attaccanti' };
   const roleOrder = ['P', 'D', 'C', 'A'];
+  const stateLabels = {
+    LOBBY: 'Lobby',
+    PLAYER_ANNOUNCED: 'Giocatore annunciato',
+    BUZZER_ACTIVE: 'Buzzer aperto',
+    BUZZER_LOCKED: 'Rilancio',
+    ROUND_END: 'Fine round',
+    ASSIGNED: 'Assegnato',
+    FINISHED: 'Asta chiusa'
+  };
 
   let socket = null;
-
-  // ---- Countdown: interpolato lato client tra i due valori che il server manda in OGNI
-  // snapshot (roundDeadlineEpochMs / serverTimeEpochMs), cosi' scorre fluido anche tra un
-  // aggiornamento websocket e l'altro, compensando lo sfasamento tra l'orologio del telefono
-  // Host e quello del Chromecast. ----
+  let lastPrice = null;
   let deadlineMs = null;
   let clockOffsetMs = 0;
   let totalRoundMs = 15000;
@@ -182,10 +343,10 @@
     const secLeft = msLeft > 0 ? Math.ceil(msLeft / 1000) : 0;
     const urgent = secLeft <= 3;
     els.countdown.textContent = String(secLeft);
-    els.countdown.style.color = urgent ? '#e7352c' : '#ffce45';
+    els.countdown.style.color = urgent ? '#ff4d4f' : '#ffce45';
     const fraction = totalRoundMs > 0 ? Math.max(0, Math.min(1, msLeft / totalRoundMs)) : 0;
     els.ringProgress.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
-    els.ringProgress.style.stroke = urgent ? '#e7352c' : '#ffce45';
+    els.ringProgress.style.stroke = urgent ? '#ff4d4f' : '#ffce45';
   }
   setInterval(updateCountdown, 150);
 
@@ -194,15 +355,13 @@
       els.rosters.innerHTML = '<div class="sidebar-empty">Nessuna squadra ancora.</div>';
       return;
     }
-    // Il server le manda gia' ordinate per nome squadra, ma ordiniamo anche qui per
-    // sicurezza (es. se un client vecchio inviasse l'elenco non ordinato).
     const sorted = rosters.slice().sort((a, b) => a.teamName.localeCompare(b.teamName));
     els.rosters.innerHTML = sorted.map(r => {
       const playersHtml = (r.players && r.players.length > 0)
         ? r.players.map(p =>
             '<div class="player-row">' +
               '<span class="player-name">' + p.playerName + '</span>' +
-              '<span class="player-price">' + p.price + ' cr.</span>' +
+              '<span class="player-price">' + p.price + '</span>' +
             '</div>'
           ).join('')
         : '<div class="roster-empty">Nessun acquisto ancora.</div>';
@@ -231,15 +390,13 @@
   }
 
   function renderJoinQr(hostIp, port, roomId) {
-    // QR coi dati di connessione (IP:porta + codice stanza) da inquadrare col telefono invece
-    // di digitarli a mano — vedi MainActivity.JoinSetupScreen (pulsante "Scansiona QR").
     const box = document.getElementById('joinQr');
     box.innerHTML = '';
     new QRCode(box, {
       text: 'fantabuzzer://' + hostIp + ':' + port + '/' + roomId,
-      width: 80,
-      height: 80,
-      colorDark: '#0b1220',
+      width: 96,
+      height: 96,
+      colorDark: '#10182a',
       colorLight: '#ffffff',
     });
     document.getElementById('joinQrRoom').textContent = 'Stanza ' + roomId;
@@ -247,7 +404,7 @@
   }
 
   function connectToLocalServer(hostIp, port, roomId) {
-    els.status.textContent = 'Connessione a ' + hostIp + ':' + port + '…';
+    els.status.textContent = 'Connessione a ' + hostIp + '…';
     renderJoinQr(hostIp, port, roomId);
     if (socket) { try { socket.close(); } catch (e) {} }
 
@@ -265,19 +422,28 @@
       const evt = JSON.parse(msg.data);
       if (evt.type !== 'room_state_change') return;
       const s = evt.snapshot;
-      els.status.textContent = s.state;
-      els.automode.style.display = s.autoMode ? 'block' : 'none';
-      els.pausebadge.style.display = s.isPaused ? 'block' : 'none';
-      els.pausebadge.textContent = s.isPaused && s.pauseReason ? s.pauseReason : '⏸ In pausa';
-      els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore…';
+      document.body.dataset.state = s.state || '';
+      document.body.classList.toggle('is-paused', !!s.isPaused);
+      els.status.textContent = stateLabels[s.state] || s.state;
+      els.automode.classList.toggle('show', !!s.autoMode);
+      els.pausebadge.classList.toggle('show', !!s.isPaused);
+      els.pausebadge.textContent = s.isPaused && s.pauseReason ? s.pauseReason : 'In pausa';
+      els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore';
       els.team.innerHTML = s.currentPlayer
-        ? ('<span class="rolebadge">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
+        ? ('<span class="rolebadge role-' + s.currentPlayer.role + '">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
         : '';
+      if (lastPrice !== null && lastPrice !== s.currentBid) {
+        els.price.classList.remove('pop');
+        void els.price.offsetWidth;
+        els.price.classList.add('pop');
+      }
+      lastPrice = s.currentBid;
       els.price.textContent = s.currentBid;
       const bidderP = s.participants.find(p => p.id === s.currentTopBidderId);
-      els.bidder.textContent = bidderP ? ('In testa: ' + bidderP.nickname) : '';
+      els.bidder.textContent = bidderP ? ('In testa  ' + bidderP.nickname) : '';
       els.list.innerHTML = s.participants.map(p =>
-        '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
+        '<div class="chip' + (p.id === s.currentTopBidderId ? ' lead' : '') + '">' +
+          p.nickname + ': <b>' + p.creditsRemaining + '</b></div>'
       ).join('');
       renderRosters(s.rosters);
       renderRemaining(s.remainingByRole);
@@ -296,7 +462,6 @@
   const messageBus = context.getCastMessageBus(NAMESPACE);
 
   messageBus.onMessage = (event) => {
-    // event.data è la stringa JSON inviata dal Sender: { hostIp, port, roomId }
     try {
       const config = JSON.parse(event.data);
       if (config.hostIp && config.port && config.roomId) {
@@ -307,11 +472,7 @@
     }
   };
 
-  context.onSenderDisconnected = () => {
-    // Ultimo sender disconnesso: per l'MVP lasciamo il receiver acceso a mostrare
-    // l'ultimo stato noto invece di chiudere subito la sessione Cast.
-  };
-
+  context.onSenderDisconnected = () => {};
   context.start();
 </script>
 </body>
