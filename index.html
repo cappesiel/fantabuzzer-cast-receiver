@@ -47,6 +47,7 @@
   .bidder{font-size:3vw;font-weight:700;color:#4ade80}
   .status{font-size:1.7vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
   .automode{font-size:1.3vw;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
+  .pausebadge{font-size:1.4vw;font-weight:900;color:#ffce45;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
   .list{display:flex;gap:1.3vw;flex-wrap:wrap;justify-content:center;margin-top:3vh}
   .chip{background:#1c2b45;border-radius:1vw;padding:1vh 1.4vw;font-size:1.3vw}
   .chip b{color:#ffce45}
@@ -82,6 +83,7 @@
 
     <div class="wrap">
       <div class="status" id="status">In attesa del telefono Host…</div>
+      <div class="pausebadge" id="pausebadge">⏸ In pausa</div>
       <div class="automode" id="automode">Modalità automatica</div>
       <div class="player" id="player">—</div>
       <div class="team" id="team"></div>
@@ -128,6 +130,7 @@
   const els = {
     status: document.getElementById('status'),
     automode: document.getElementById('automode'),
+    pausebadge: document.getElementById('pausebadge'),
     player: document.getElementById('player'),
     team: document.getElementById('team'),
     price: document.getElementById('price'),
@@ -239,6 +242,7 @@
       const s = evt.snapshot;
       els.status.textContent = s.state;
       els.automode.style.display = s.autoMode ? 'block' : 'none';
+      els.pausebadge.style.display = s.isPaused ? 'block' : 'none';
       els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore…';
       els.team.innerHTML = s.currentPlayer
         ? ('<span class="rolebadge">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
