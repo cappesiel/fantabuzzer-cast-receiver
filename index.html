@@ -33,15 +33,9 @@
   }
 
   .bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-  .orb {
-    position: absolute; border-radius: 50%; filter: blur(80px); opacity: .42;
-    transition: background .6s ease, transform 1.2s ease;
-  }
-  .orb-a { width: 42vw; height: 42vw; left: -8vw; top: -12vw; background: #1b3a7a; }
-  .orb-b { width: 36vw; height: 36vw; right: -6vw; bottom: -10vw; background: #5a3a00; }
-  body[data-state="BUZZER_ACTIVE"] .orb-b { background: #8a5a00; opacity: .55; }
-  body[data-state="ROUND_END"] .orb-b, body[data-state="ASSIGNED"] .orb-b { background: #0d5a32; }
-  body.is-paused .orb-a { background: #6a4a00; }
+  .orb { position: absolute; border-radius: 50%; opacity: .28; }
+  .orb-a { width: 38vw; height: 38vw; left: -10vw; top: -14vw; background: #16305f; }
+  .orb-b { width: 32vw; height: 32vw; right: -8vw; bottom: -12vw; background: #3d2a00; }
 
   .layout {
     position: relative; z-index: 1;
@@ -55,7 +49,6 @@
     border-color: var(--line);
     padding: 2.4vh 1.2vw 2vh;
     overflow-y: auto;
-    backdrop-filter: blur(16px);
   }
   .sidebar { border-right: 1px solid var(--line); }
   .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
@@ -68,7 +61,6 @@
     width: 2.2vw; height: 2.2vw; min-width: 28px; min-height: 28px;
     border-radius: .55vw;
     background: linear-gradient(135deg, #ffce45, #ff8a1f);
-    box-shadow: 0 0 18px rgba(255,206,69,.35);
   }
   .brand-name { font-weight: 800; font-size: 1.35vw; letter-spacing: -.02em; line-height: 1; }
   .brand-name span { display: block; color: var(--gold); font-size: .72vw; letter-spacing: .16em; text-transform: uppercase; margin-top: .25vh; }
@@ -154,10 +146,7 @@
   .price {
     font-size: clamp(64px, 9.4vw, 180px);
     font-weight: 900; line-height: .85; color: var(--gold);
-    text-shadow: 0 0 40px rgba(255,206,69,.22);
-    transition: transform .18s ease;
   }
-  .price.pop { transform: scale(1.06); }
   .price-label { margin-top: .6vh; font-size: 1.05vw; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 
   .countdown-ring {
@@ -168,9 +157,8 @@
   .countdown-ring .ring-track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 8; }
   .countdown-ring .ring-progress {
     fill: none; stroke: var(--gold); stroke-width: 8; stroke-linecap: round;
-    transition: stroke-dashoffset .18s linear, stroke .2s;
-    filter: drop-shadow(0 0 8px rgba(255,206,69,.35));
   }
+  .countdown-ring.is-hidden { display: none !important; }
   .countdown-ring .countdown-number {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-size: 2.8vw; font-weight: 900; color: var(--gold);
@@ -198,7 +186,6 @@
   .chip.lead {
     border-color: rgba(62,230,135,.35);
     background: rgba(62,230,135,.1);
-    box-shadow: 0 0 16px rgba(62,230,135,.12);
   }
 
   .role-count-row {
@@ -324,39 +311,71 @@
   };
 
   let socket = null;
-  let lastPrice = null;
+  let wantSocket = false;
+  let reconnectTimer = null;
+  let lastConnectKey = '';
+  let lastQrKey = '';
+  let lastPaintKey = '';
+  let lastCountSec = null;
+  let lastUrgent = null;
   let deadlineMs = null;
   let clockOffsetMs = 0;
   let totalRoundMs = 15000;
   const RING_RADIUS = 54;
   const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
   els.ringProgress.style.strokeDasharray = String(RING_CIRCUMFERENCE);
+  els.countdownRing.classList.add('is-hidden');
+
+  function setText(el, value) {
+    if (el.textContent !== value) el.textContent = value;
+  }
+
+  function setHtml(el, html) {
+    if (el.innerHTML !== html) el.innerHTML = html;
+  }
+
+  function snapshotKey(s) {
+    const player = s.currentPlayer;
+    const credits = (s.participants || []).map(p => p.id + ':' + p.creditsRemaining + ':' + (p.isConnected ? '1' : '0')).join(',');
+    const rosters = (s.rosters || []).map(r =>
+      r.teamName + ':' + (r.players || []).map(p => p.playerName + p.price).join(',')
+    ).join('|');
+    const remain = (s.remainingByRole || []).map(r => r.role + r.remaining).join(',');
+    return [
+      s.state, s.isPaused, s.pauseReason, s.autoMode, s.currentBid, s.currentTopBidderId,
+      player ? player.name + player.team + player.role : '',
+      credits, rosters, remain, s.roundDeadlineEpochMs || ''
+    ].join('~');
+  }
 
   function updateCountdown() {
-    if (deadlineMs === null) {
-      els.countdownRing.style.display = 'none';
+    const show = deadlineMs !== null;
+    els.countdownRing.classList.toggle('is-hidden', !show);
+    if (!show) {
+      lastCountSec = null;
       return;
     }
-    els.countdownRing.style.display = 'block';
-    const estimatedServerNow = Date.now() + clockOffsetMs;
-    const msLeft = deadlineMs - estimatedServerNow;
+    const msLeft = deadlineMs - (Date.now() + clockOffsetMs);
     const secLeft = msLeft > 0 ? Math.ceil(msLeft / 1000) : 0;
     const urgent = secLeft <= 3;
+    if (secLeft === lastCountSec && urgent === lastUrgent) return;
+    lastCountSec = secLeft;
+    lastUrgent = urgent;
     els.countdown.textContent = String(secLeft);
-    els.countdown.style.color = urgent ? '#ff4d4f' : '#ffce45';
+    const color = urgent ? '#ff4d4f' : '#ffce45';
+    els.countdown.style.color = color;
+    els.ringProgress.style.stroke = color;
     const fraction = totalRoundMs > 0 ? Math.max(0, Math.min(1, msLeft / totalRoundMs)) : 0;
     els.ringProgress.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
-    els.ringProgress.style.stroke = urgent ? '#ff4d4f' : '#ffce45';
   }
-  setInterval(updateCountdown, 150);
+  setInterval(updateCountdown, 250);
 
-  function renderRosters(rosters) {
+  function rostersHtml(rosters) {
     if (!rosters || rosters.length === 0) {
-      els.rosters.innerHTML = '<div class="sidebar-empty">Nessuna squadra ancora.</div>';
-      return;
+      return '<div class="sidebar-empty">Nessuna squadra ancora.</div>';
     }
     const sorted = rosters.slice().sort((a, b) => a.teamName.localeCompare(b.teamName));
-    els.rosters.innerHTML = sorted.map(r => {
+    return sorted.map(r => {
       const playersHtml = (r.players && r.players.length > 0)
         ? r.players.map(p =>
             '<div class="player-row">' +
@@ -373,14 +392,11 @@
     }).join('');
   }
 
-  function renderRemaining(remainingByRole) {
-    if (!remainingByRole || remainingByRole.length === 0) {
-      els.remaining.innerHTML = '';
-      return;
-    }
+  function remainingHtml(remainingByRole) {
+    if (!remainingByRole || remainingByRole.length === 0) return '';
     const byRole = {};
     remainingByRole.forEach(rc => { byRole[rc.role] = rc.remaining; });
-    els.remaining.innerHTML = roleOrder.map(role => {
+    return roleOrder.map(role => {
       const count = byRole[role] || 0;
       return '<div class="role-count-row' + (count === 0 ? ' zero' : '') + '">' +
         '<span class="role-label">' + roleLabelsPlural[role] + '</span>' +
@@ -390,6 +406,9 @@
   }
 
   function renderJoinQr(hostIp, port, roomId) {
+    const key = hostIp + ':' + port + '/' + roomId;
+    if (lastQrKey === key) return;
+    lastQrKey = key;
     const box = document.getElementById('joinQr');
     box.innerHTML = '';
     new QRCode(box, {
@@ -403,58 +422,88 @@
     document.getElementById('joinQrBox').style.display = 'block';
   }
 
-  function connectToLocalServer(hostIp, port, roomId) {
-    els.status.textContent = 'Connessione a ' + hostIp + '…';
-    renderJoinQr(hostIp, port, roomId);
-    if (socket) { try { socket.close(); } catch (e) {} }
+  function applySnapshot(s) {
+    const key = snapshotKey(s);
+    if (key === lastPaintKey) return;
+    lastPaintKey = key;
 
-    socket = new WebSocket('ws://' + hostIp + ':' + port + '/ws');
-    socket.onopen = () => {
-      els.status.textContent = 'Connesso';
-      socket.send(JSON.stringify({ type: 'join_as_spectator', roomId: roomId }));
+    setText(els.status, stateLabels[s.state] || s.state);
+    els.automode.classList.toggle('show', !!s.autoMode);
+    els.pausebadge.classList.toggle('show', !!s.isPaused);
+    setText(els.pausebadge, s.isPaused && s.pauseReason ? s.pauseReason : 'In pausa');
+    setText(els.player, s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore');
+    setHtml(els.team, s.currentPlayer
+      ? ('<span class="rolebadge role-' + s.currentPlayer.role + '">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
+      : '');
+    setText(els.price, String(s.currentBid));
+    const bidderP = s.participants.find(p => p.id === s.currentTopBidderId);
+    setText(els.bidder, bidderP ? ('In testa  ' + bidderP.nickname) : '');
+    setHtml(els.list, s.participants.map(p =>
+      '<div class="chip' + (p.id === s.currentTopBidderId ? ' lead' : '') + '">' +
+        p.nickname + ': <b>' + p.creditsRemaining + '</b></div>'
+    ).join(''));
+    setHtml(els.rosters, rostersHtml(s.rosters));
+    setHtml(els.remaining, remainingHtml(s.remainingByRole));
+
+    if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
+      deadlineMs = s.roundDeadlineEpochMs;
+      clockOffsetMs = s.serverTimeEpochMs - Date.now();
+      totalRoundMs = (s.roundTimeoutSeconds || 15) * 1000;
+    } else {
+      deadlineMs = null;
+    }
+    lastCountSec = null;
+    updateCountdown();
+  }
+
+  function scheduleReconnect(hostIp, port, roomId) {
+    if (reconnectTimer || !wantSocket) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectToLocalServer(hostIp, port, roomId);
+    }, 2000);
+  }
+
+  function connectToLocalServer(hostIp, port, roomId) {
+    const key = hostIp + ':' + port + '/' + roomId;
+    if (socket && socket.readyState === WebSocket.OPEN && lastConnectKey === key) return;
+    wantSocket = true;
+    lastConnectKey = key;
+    renderJoinQr(hostIp, port, roomId);
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (socket) {
+      const old = socket;
+      socket = null;
+      old.onclose = null;
+      old.onerror = null;
+      old.onmessage = null;
+      try { old.close(); } catch (e) {}
+    }
+
+    const ws = new WebSocket('ws://' + hostIp + ':' + port + '/ws');
+    socket = ws;
+    ws.onopen = () => {
+      if (socket !== ws) return;
+      setText(els.status, 'Connesso');
+      ws.send(JSON.stringify({ type: 'join_as_spectator', roomId: roomId }));
     };
-    socket.onclose = () => {
-      els.status.textContent = 'Connessione persa, riprovo…';
-      setTimeout(() => connectToLocalServer(hostIp, port, roomId), 2000);
+    ws.onclose = () => {
+      if (socket !== ws) return;
+      socket = null;
+      setText(els.status, 'Connessione persa, riprovo…');
+      scheduleReconnect(hostIp, port, roomId);
     };
-    socket.onerror = () => { els.status.textContent = 'Errore di connessione al server locale'; };
-    socket.onmessage = (msg) => {
+    ws.onerror = () => {
+      if (socket === ws) setText(els.status, 'Errore di connessione al server locale');
+    };
+    ws.onmessage = (msg) => {
+      if (socket !== ws) return;
       const evt = JSON.parse(msg.data);
       if (evt.type !== 'room_state_change') return;
-      const s = evt.snapshot;
-      document.body.dataset.state = s.state || '';
-      document.body.classList.toggle('is-paused', !!s.isPaused);
-      els.status.textContent = stateLabels[s.state] || s.state;
-      els.automode.classList.toggle('show', !!s.autoMode);
-      els.pausebadge.classList.toggle('show', !!s.isPaused);
-      els.pausebadge.textContent = s.isPaused && s.pauseReason ? s.pauseReason : 'In pausa';
-      els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore';
-      els.team.innerHTML = s.currentPlayer
-        ? ('<span class="rolebadge role-' + s.currentPlayer.role + '">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
-        : '';
-      if (lastPrice !== null && lastPrice !== s.currentBid) {
-        els.price.classList.remove('pop');
-        void els.price.offsetWidth;
-        els.price.classList.add('pop');
-      }
-      lastPrice = s.currentBid;
-      els.price.textContent = s.currentBid;
-      const bidderP = s.participants.find(p => p.id === s.currentTopBidderId);
-      els.bidder.textContent = bidderP ? ('In testa  ' + bidderP.nickname) : '';
-      els.list.innerHTML = s.participants.map(p =>
-        '<div class="chip' + (p.id === s.currentTopBidderId ? ' lead' : '') + '">' +
-          p.nickname + ': <b>' + p.creditsRemaining + '</b></div>'
-      ).join('');
-      renderRosters(s.rosters);
-      renderRemaining(s.remainingByRole);
-      if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
-        deadlineMs = s.roundDeadlineEpochMs;
-        clockOffsetMs = s.serverTimeEpochMs - Date.now();
-        totalRoundMs = (s.roundTimeoutSeconds || 15) * 1000;
-      } else {
-        deadlineMs = null;
-      }
-      updateCountdown();
+      applySnapshot(evt.snapshot);
     };
   }
 
@@ -468,7 +517,7 @@
         connectToLocalServer(config.hostIp, config.port, config.roomId);
       }
     } catch (e) {
-      els.status.textContent = 'Messaggio dal telefono non valido';
+      setText(els.status, 'Messaggio dal telefono non valido');
     }
   };
 
