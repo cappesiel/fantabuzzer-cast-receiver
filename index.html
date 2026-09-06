@@ -43,7 +43,11 @@
     letter-spacing:.06em;margin-right:.6vw;vertical-align:middle;
   }
   .price{font-size:10vw;font-weight:900;margin:2.5vh 0;color:#ffce45}
-  .countdown{font-size:4.2vw;font-weight:900;color:#ffce45;margin-top:-1vh;margin-bottom:1vh;min-height:4.5vw}
+  .countdown-ring{position:relative;width:11vw;height:11vw;min-width:90px;min-height:90px;margin:.5vh 0 1.4vh;display:none}
+  .countdown-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .countdown-ring .ring-track{fill:none;stroke:rgba(255,255,255,.12);stroke-width:9}
+  .countdown-ring .ring-progress{fill:none;stroke:#ffce45;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .18s linear,stroke .2s}
+  .countdown-ring .countdown-number{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.4vw;font-weight:900;color:#ffce45}
   .bidder{font-size:3vw;font-weight:700;color:#4ade80}
   .status{font-size:1.7vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
   .automode{font-size:1.3vw;font-weight:700;color:#4ade80;letter-spacing:.1em;text-transform:uppercase;margin-top:.5vh;display:none}
@@ -88,7 +92,13 @@
       <div class="player" id="player">—</div>
       <div class="team" id="team"></div>
       <div class="price" id="price">0</div>
-      <div class="countdown" id="countdown"></div>
+      <div class="countdown-ring" id="countdownRing">
+        <svg viewBox="0 0 120 120">
+          <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+          <circle class="ring-progress" id="ringProgress" cx="60" cy="60" r="54"></circle>
+        </svg>
+        <div class="countdown-number" id="countdown"></div>
+      </div>
       <div class="bidder" id="bidder"></div>
       <div class="list" id="list"></div>
     </div>
@@ -135,6 +145,8 @@
     team: document.getElementById('team'),
     price: document.getElementById('price'),
     countdown: document.getElementById('countdown'),
+    countdownRing: document.getElementById('countdownRing'),
+    ringProgress: document.getElementById('ringProgress'),
     bidder: document.getElementById('bidder'),
     list: document.getElementById('list'),
     rosters: document.getElementById('rosters'),
@@ -154,13 +166,26 @@
   // Host e quello del Chromecast. ----
   let deadlineMs = null;
   let clockOffsetMs = 0;
+  let totalRoundMs = 15000;
+  const RING_RADIUS = 54;
+  const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+  els.ringProgress.style.strokeDasharray = String(RING_CIRCUMFERENCE);
+
   function updateCountdown() {
-    if (deadlineMs === null) { els.countdown.textContent = ''; return; }
+    if (deadlineMs === null) {
+      els.countdownRing.style.display = 'none';
+      return;
+    }
+    els.countdownRing.style.display = 'block';
     const estimatedServerNow = Date.now() + clockOffsetMs;
     const msLeft = deadlineMs - estimatedServerNow;
     const secLeft = msLeft > 0 ? Math.ceil(msLeft / 1000) : 0;
-    els.countdown.textContent = '⏱ ' + secLeft;
-    els.countdown.style.color = secLeft <= 3 ? '#e7352c' : '#ffce45';
+    const urgent = secLeft <= 3;
+    els.countdown.textContent = String(secLeft);
+    els.countdown.style.color = urgent ? '#e7352c' : '#ffce45';
+    const fraction = totalRoundMs > 0 ? Math.max(0, Math.min(1, msLeft / totalRoundMs)) : 0;
+    els.ringProgress.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
+    els.ringProgress.style.stroke = urgent ? '#e7352c' : '#ffce45';
   }
   setInterval(updateCountdown, 150);
 
@@ -258,6 +283,7 @@
       if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
         deadlineMs = s.roundDeadlineEpochMs;
         clockOffsetMs = s.serverTimeEpochMs - Date.now();
+        totalRoundMs = (s.roundTimeoutSeconds || 15) * 1000;
       } else {
         deadlineMs = null;
       }
