@@ -46,7 +46,7 @@
   .countdown-ring{position:relative;width:11vw;height:11vw;min-width:90px;min-height:90px;margin:.5vh 0 1.4vh;display:none}
   .countdown-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
   .countdown-ring .ring-track{fill:none;stroke:rgba(255,255,255,.12);stroke-width:9}
-  .countdown-ring .ring-progress{fill:none;stroke:#ffce45;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .18s linear,stroke .2s}
+  .countdown-ring .ring-progress{fill:none;stroke:#ffce45;stroke-width:9;stroke-linecap:round}
   .countdown-ring .countdown-number{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:3.4vw;font-weight:900;color:#ffce45}
   .bidder{font-size:3vw;font-weight:700;color:#4ade80}
   .status{font-size:1.7vw;opacity:.6;margin-top:1vh;letter-spacing:.1em;text-transform:uppercase}
@@ -159,6 +159,18 @@
   const roleOrder = ['P', 'D', 'C', 'A'];
 
   let socket = null;
+  let connectGen = 0;
+  let lastJoinKey = '';
+  let lastQrKey = '';
+  let reconnectTimer = null;
+  let countdownRaf = 0;
+  let lastRostersSig = null;
+  let lastRemainingSig = null;
+  let lastListSig = null;
+  let lastTeamSig = null;
+  let lastDisplayedSec = -1;
+  let lastUrgent = null;
+  let ringVisible = false;
 
   // ---- Countdown: interpolato lato client tra i due valori che il server manda in OGNI
   // snapshot (roundDeadlineEpochMs / serverTimeEpochMs), cosi' scorre fluido anche tra un
@@ -173,31 +185,99 @@
 
   function updateCountdown() {
     if (deadlineMs === null) {
-      els.countdownRing.style.display = 'none';
+      if (ringVisible) {
+        els.countdownRing.style.display = 'none';
+        ringVisible = false;
+      }
       return;
     }
-    els.countdownRing.style.display = 'block';
+    if (!ringVisible) {
+      els.countdownRing.style.display = 'block';
+      ringVisible = true;
+    }
     const estimatedServerNow = Date.now() + clockOffsetMs;
     const msLeft = deadlineMs - estimatedServerNow;
     const secLeft = msLeft > 0 ? Math.ceil(msLeft / 1000) : 0;
     const urgent = secLeft <= 3;
-    els.countdown.textContent = String(secLeft);
-    els.countdown.style.color = urgent ? '#e7352c' : '#ffce45';
+    if (secLeft !== lastDisplayedSec) {
+      els.countdown.textContent = String(secLeft);
+      lastDisplayedSec = secLeft;
+    }
+    if (urgent !== lastUrgent) {
+      els.countdown.style.color = urgent ? '#e7352c' : '#ffce45';
+      els.ringProgress.style.stroke = urgent ? '#e7352c' : '#ffce45';
+      lastUrgent = urgent;
+    }
     const fraction = totalRoundMs > 0 ? Math.max(0, Math.min(1, msLeft / totalRoundMs)) : 0;
     els.ringProgress.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
-    els.ringProgress.style.stroke = urgent ? '#e7352c' : '#ffce45';
   }
-  setInterval(updateCountdown, 150);
+
+  function stopCountdownLoop() {
+    if (countdownRaf) {
+      cancelAnimationFrame(countdownRaf);
+      countdownRaf = 0;
+    }
+  }
+
+  function startCountdownLoop() {
+    if (countdownRaf) return;
+    const tick = () => {
+      updateCountdown();
+      if (deadlineMs !== null) countdownRaf = requestAnimationFrame(tick);
+      else countdownRaf = 0;
+    };
+    countdownRaf = requestAnimationFrame(tick);
+  }
+
+  function setDeadline(ms) {
+    deadlineMs = ms;
+    if (ms === null) {
+      stopCountdownLoop();
+      updateCountdown();
+    } else {
+      startCountdownLoop();
+    }
+  }
+
+  function rosterSignature(rosters) {
+    if (!rosters || rosters.length === 0) return '';
+    let sig = '';
+    for (let i = 0; i < rosters.length; i++) {
+      const r = rosters[i];
+      const n = r.players ? r.players.length : 0;
+      sig += r.participantId + ':' + n + ';';
+    }
+    return sig;
+  }
+
+  function remainingSignature(remainingByRole) {
+    if (!remainingByRole || remainingByRole.length === 0) return '';
+    let sig = '';
+    for (let i = 0; i < remainingByRole.length; i++) {
+      sig += remainingByRole[i].role + remainingByRole[i].remaining + ',';
+    }
+    return sig;
+  }
+
+  function listSignature(participants) {
+    if (!participants) return '';
+    let sig = '';
+    for (let i = 0; i < participants.length; i++) {
+      const p = participants[i];
+      sig += p.id + ':' + p.creditsRemaining + ';';
+    }
+    return sig;
+  }
 
   function renderRosters(rosters) {
+    const sig = rosterSignature(rosters);
+    if (sig === lastRostersSig) return;
+    lastRostersSig = sig;
     if (!rosters || rosters.length === 0) {
       els.rosters.innerHTML = '<div class="sidebar-empty">Nessuna squadra ancora.</div>';
       return;
     }
-    // Il server le manda gia' ordinate per nome squadra, ma ordiniamo anche qui per
-    // sicurezza (es. se un client vecchio inviasse l'elenco non ordinato).
-    const sorted = rosters.slice().sort((a, b) => a.teamName.localeCompare(b.teamName));
-    els.rosters.innerHTML = sorted.map(r => {
+    els.rosters.innerHTML = rosters.map(r => {
       const playersHtml = (r.players && r.players.length > 0)
         ? r.players.map(p =>
             '<div class="player-row">' +
@@ -215,6 +295,9 @@
   }
 
   function renderRemaining(remainingByRole) {
+    const sig = remainingSignature(remainingByRole);
+    if (sig === lastRemainingSig) return;
+    lastRemainingSig = sig;
     if (!remainingByRole || remainingByRole.length === 0) {
       els.remaining.innerHTML = '';
       return;
@@ -247,22 +330,49 @@
   }
 
   function connectToLocalServer(hostIp, port, roomId) {
+    const key = hostIp + ':' + port + '/' + roomId;
+    if (socket && lastJoinKey === key && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+    lastJoinKey = key;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    const gen = ++connectGen;
+    if (socket) {
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.onmessage = null;
+      try { socket.close(); } catch (e) {}
+      socket = null;
+    }
     els.status.textContent = 'Connessione a ' + hostIp + ':' + port + '…';
-    renderJoinQr(hostIp, port, roomId);
-    if (socket) { try { socket.close(); } catch (e) {} }
+    if (lastQrKey !== key) {
+      renderJoinQr(hostIp, port, roomId);
+      lastQrKey = key;
+    }
 
-    socket = new WebSocket('ws://' + hostIp + ':' + port + '/ws');
-    socket.onopen = () => {
+    const ws = new WebSocket('ws://' + hostIp + ':' + port + '/ws');
+    socket = ws;
+    ws.onopen = () => {
+      if (gen !== connectGen) return;
       els.status.textContent = 'Connesso';
-      socket.send(JSON.stringify({ type: 'join_as_spectator', roomId: roomId }));
+      ws.send(JSON.stringify({ type: 'join_as_spectator', roomId: roomId }));
     };
-    socket.onclose = () => {
+    ws.onclose = () => {
+      if (gen !== connectGen) return;
       els.status.textContent = 'Connessione persa, riprovo…';
-      setTimeout(() => connectToLocalServer(hostIp, port, roomId), 2000);
+      reconnectTimer = setTimeout(() => connectToLocalServer(hostIp, port, roomId), 2000);
     };
-    socket.onerror = () => { els.status.textContent = 'Errore di connessione al server locale'; };
-    socket.onmessage = (msg) => {
-      const evt = JSON.parse(msg.data);
+    ws.onerror = () => {
+      if (gen !== connectGen) return;
+      els.status.textContent = 'Errore di connessione al server locale';
+    };
+    ws.onmessage = (msg) => {
+      if (gen !== connectGen) return;
+      let evt;
+      try { evt = JSON.parse(msg.data); } catch (e) { return; }
       if (evt.type !== 'room_state_change') return;
       const s = evt.snapshot;
       els.status.textContent = s.state;
@@ -270,25 +380,34 @@
       els.pausebadge.style.display = s.isPaused ? 'block' : 'none';
       els.pausebadge.textContent = s.isPaused && s.pauseReason ? s.pauseReason : '⏸ In pausa';
       els.player.textContent = s.currentPlayer ? s.currentPlayer.name : 'In attesa del prossimo giocatore…';
-      els.team.innerHTML = s.currentPlayer
-        ? ('<span class="rolebadge">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
-        : '';
+      const teamSig = s.currentPlayer ? (s.currentPlayer.id + s.currentPlayer.role + s.currentPlayer.team) : '';
+      if (teamSig !== lastTeamSig) {
+        lastTeamSig = teamSig;
+        els.team.innerHTML = s.currentPlayer
+          ? ('<span class="rolebadge">' + (roleLabels[s.currentPlayer.role] || s.currentPlayer.role) + '</span>' + s.currentPlayer.team)
+          : '';
+      }
       els.price.textContent = s.currentBid;
-      const bidderP = s.participants.find(p => p.id === s.currentTopBidderId);
+      const bidderP = s.currentTopBidderId
+        ? s.participants.find(p => p.id === s.currentTopBidderId)
+        : null;
       els.bidder.textContent = bidderP ? ('In testa: ' + bidderP.nickname) : '';
-      els.list.innerHTML = s.participants.map(p =>
-        '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
-      ).join('');
+      const listSig = listSignature(s.participants);
+      if (listSig !== lastListSig) {
+        lastListSig = listSig;
+        els.list.innerHTML = s.participants.map(p =>
+          '<div class="chip">' + p.nickname + ': <b>' + p.creditsRemaining + '</b> cr.</div>'
+        ).join('');
+      }
       renderRosters(s.rosters);
       renderRemaining(s.remainingByRole);
       if (s.roundDeadlineEpochMs && s.state === 'BUZZER_ACTIVE') {
-        deadlineMs = s.roundDeadlineEpochMs;
         clockOffsetMs = s.serverTimeEpochMs - Date.now();
         totalRoundMs = (s.roundTimeoutSeconds || 15) * 1000;
+        setDeadline(s.roundDeadlineEpochMs);
       } else {
-        deadlineMs = null;
+        setDeadline(null);
       }
-      updateCountdown();
     };
   }
 
